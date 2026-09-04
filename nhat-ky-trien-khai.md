@@ -101,4 +101,36 @@ Tài liệu này ghi chú chi tiết từng bước đã thực hiện, các quy
 ---
 
 ## GIAI ĐOẠN 3: CI PIPELINE (BUILD - TEST - SCAN - PUSH)
+
+- **Thời gian thực hiện:** 04/09/2026
+- **Mục tiêu:** Xây dựng quy trình tích hợp liên tục (CI) tự động theo chuẩn DevSecOps: Test -> Quét lỗ hổng Trivy -> Build Docker Image -> Push lên Container Registry với tag Commit SHA.
+
+### 1. Các thành phần hạ tầng đã thiết lập
+- **GitLab Runner:**
+  - Cài đặt trực tiếp trên máy ảo `gitlab-server` (`192.168.180.51`).
+  - Executor: `docker` (sử dụng base image `docker:latest`).
+  - Cấu hình socket binding: Mount `/var/run/docker.sock:/var/run/docker.sock` để runner giao tiếp trực tiếp với Docker Engine máy chủ.
+  - Cấu hình mạng: Khai báo `extra_hosts = ["gitlab.ducthinh.com:192.168.180.51"]` để các container runner phân giải được domain nội bộ.
+- **GitLab Container Registry:**
+  - Kích hoạt trên cổng `5050` (`registry_external_url 'http://gitlab.ducthinh.com:5050'`).
+  - Cấu hình `/etc/docker/daemon.json` chấp nhận insecure HTTP registry.
+  - Bật tính năng Container Registry trong cấu hình Visibility của project `robot-shop`.
+
+### 2. Thiết kế và Tinh chỉnh Pipeline (`.gitlab-ci.yml`)
+- **Stage 1 (Test):** Sử dụng image `node:14-alpine`, chạy `node -c server.js` để kiểm tra cú pháp nhanh và toàn vẹn trước khi build.
+- **Stage 2 (Scan - DevSecOps Shift-Left):** Sử dụng `aquasec/trivy:latest` để tự động quét toàn bộ thư viện dependencies, phát hiện các lỗ hổng bảo mật mức `HIGH` và `CRITICAL`.
+- **Stage 3 (Build & Push):** Sử dụng `docker:latest`, tự động xác thực bằng biến môi trường `$CI_REGISTRY_USER` và `$CI_JOB_TOKEN`, đóng gói image với tag Commit SHA (`$CI_COMMIT_SHORT_SHA`) và tag `latest`, sau đó đẩy trực tiếp lên GitLab Container Registry.
+
+### 3. Sự cố phát sinh & Khắc phục
+- **Lỗi API Docker Client cũ:** Ban đầu sử dụng `image: docker:24.0.5` (API v1.43) không tương thích với Docker daemon mới của host (yêu cầu API >= 1.44). Đã khắc phục bằng cách nâng cấp lên `docker:latest`.
+- **Lỗi cú pháp YAML:** Dấu hai chấm `:` trong chuỗi `echo` gây hiểu nhầm sang cặp key-value dictionary. Đã làm sạch và chuẩn hóa toàn bộ file CI.
+
+### 4. Đánh giá hoàn thành Giai đoạn 3
+- [x] Pipeline chạy xanh toàn bộ (Passed) 3/3 jobs.
+- [x] Image `cart` xuất hiện trên GitLab Container Registry với tag Commit SHA rõ ràng.
+- [x] Khép kín vòng đời CI, sẵn sàng chuyển sang Giai đoạn 4: GitOps Continuous Delivery với ArgoCD.
+
+---
+
+## GIAI ĐOẠN 4: GITOPS CD (ARGOCD)
 *(Đang chuẩn bị thực hiện)*

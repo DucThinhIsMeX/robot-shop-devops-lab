@@ -103,7 +103,7 @@ flowchart TD
 - [x] **Giai đoạn 0:** Củng cố nền tảng cụm (StorageClass `local-path`, Ingress-Nginx, kiểm tra 3 nodes Ready).
 - [x] **Giai đoạn 1:** Triển khai Robot Shop thủ công qua Helm làm mốc đối chứng (baseline), xử lý lỗi StorageClass của Redis.
 - [x] **Giai đoạn 2:** Thiết lập Source Control trên GitLab on-premise, tách biệt Code Repo (`robot-shop`) và Config Repo (`robot-shop-deploy`), kích hoạt Container Registry.
-- [ ] **Giai đoạn 3:** Xây dựng CI Pipeline tự động (Build -> Test -> Scan Trivy -> Push Image gắn tag Commit SHA).
+- [x] **Giai đoạn 3:** Xây dựng CI Pipeline tự động (Test syntax -> Scan Trivy DevSecOps -> Docker Build & Push với tag Commit SHA).
 - [ ] **Giai đoạn 4:** Thiết lập GitOps Continuous Delivery với ArgoCD (Tự động đồng bộ và Self-healing).
 - [ ] **Giai đoạn 5:** Infrastructure as Code (Terraform & Ansible).
 - [ ] **Giai đoạn 6:** DevSecOps (SonarQube Quality Gate + HashiCorp Vault).

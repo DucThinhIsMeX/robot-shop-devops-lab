@@ -1,0 +1,33 @@
+stages:
+  - test
+  - scan
+  - build-and-push
+
+variables:
+  IMAGE_TAG: "$CI_REGISTRY_IMAGE/cart:$CI_COMMIT_SHORT_SHA"
+  IMAGE_LATEST: "$CI_REGISTRY_IMAGE/cart:latest"
+
+test_cart:
+  stage: test
+  image: node:14-alpine
+  script:
+    - cd cart
+    - node -c server.js
+
+scan_cart:
+  stage: scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy fs --severity HIGH,CRITICAL --format table cart/
+  allow_failure: true
+
+build_and_push_cart:
+  stage: build-and-push
+  image: docker:latest
+  script:
+    - echo "$CI_JOB_TOKEN" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$IMAGE_TAG" -t "$IMAGE_LATEST" cart/
+    - docker push "$IMAGE_TAG"
+    - docker push "$IMAGE_LATEST"

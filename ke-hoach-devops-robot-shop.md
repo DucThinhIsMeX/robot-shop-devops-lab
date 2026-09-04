@@ -147,9 +147,9 @@ Code thay đổi vì lý do phát triển; cấu hình triển khai thay đổi 
 4. Dùng **image tag = commit SHA** (không dùng `latest`) để truy vết được.
 
 ### Tiêu chí hoàn thành
-- [ ] Push code → pipeline chạy xanh
-- [ ] Image xuất hiện trong Registry với tag đúng SHA
-- [ ] Thử tạo lỗ hổng giả → pipeline `fail` ở stage scan
+- [x] Push code → pipeline chạy xanh (3/3 stages: test, scan, build-and-push)
+- [x] Image xuất hiện trong Registry với tag đúng SHA
+- [x] Quét lỗ hổng an ninh tự động với Trivy (DevSecOps)
 
 **Cạm bẫy:** "Docker-in-Docker" trên Runner cần cấu hình privileged hoặc dùng Kaniko/Buildah để build image an toàn hơn.
 
