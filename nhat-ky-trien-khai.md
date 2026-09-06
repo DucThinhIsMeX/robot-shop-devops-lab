@@ -133,4 +133,37 @@ Tài liệu này ghi chú chi tiết từng bước đã thực hiện, các quy
 ---
 
 ## GIAI ĐOẠN 4: GITOPS CD (ARGOCD)
+
+- **Thời gian thực hiện:** 06/09/2026
+- **Mục tiêu:** Thiết lập quy trình phân phối liên tục (CD) theo chuẩn GitOps với ArgoCD. Git là nguồn chân lý duy nhất (Single Source of Truth), loại bỏ hoàn toàn việc gõ lệnh `helm` hoặc `kubectl` thủ công.
+
+### 1. Triển khai ArgoCD
+- Dọn dẹp bản cài đặt thủ công ở Giai đoạn 1 (`helm uninstall robot-shop -n robot-shop`).
+- Cài đặt ArgoCD vào cụm Kubernetes trong namespace `argocd`.
+- Mở cổng truy cập Web UI của `argocd-server` bằng phương thức `NodePort`.
+- Lấy và giải mã mật khẩu khởi tạo từ secret `argocd-initial-admin-secret`.
+
+### 2. Kết nối Kho cấu hình GitOps (`robot-shop-deploy`)
+- **Sự cố phát sinh (DNS CoreDNS):** Khi trỏ URL bằng domain nội bộ `http://gitlab.ducthinh.com/...`, Pod ArgoCD báo lỗi `dial tcp: lookup gitlab.ducthinh.com on 10.96.0.10:53: no such host` do CoreDNS nội bộ không biết domain host ảo.
+- **Giải pháp:** Cấu hình trỏ trực tiếp bằng IP máy ảo GitLab `http://192.168.180.51/robot-shop-group/robot-shop-deploy.git`. Kết nối chuyển sang `Successful` ngay lập tức.
+
+### 3. Khởi tạo ArgoCD Application & Vận hành Tự động
+- Tạo ứng dụng `robot-shop` với chế độ đồng bộ:
+  - **`Auto-Sync`:** Tự động lắng nghe thay đổi trên nhánh `main` của repo deploy.
+  - **`Prune Resources`:** Tự động dọn dẹp các tài nguyên thừa.
+  - **`Self-Heal`:** Tự động khôi phục cấu hình khi có can thiệp thủ công từ ngoài cụm.
+- ArgoCD đồng bộ toàn bộ hơn 10 microservices, chuyển sang trạng thái `Synced` và `Healthy`.
+
+### 4. Kiểm chứng Vòng lặp GitOps (GitOps Loop Validation)
+- Thay đổi số lượng `replicas: 2` trực tiếp trong file `cart-deployment.yaml` trên repo `robot-shop-deploy` ở GitLab và commit.
+- ArgoCD tự động phát hiện commit mới từ Git và scale pod của service `cart` lên 2 pod mà không cần bất kỳ lệnh thao tác tay nào trên cụm.
+
+### 5. Đánh giá hoàn thành Giai đoạn 4
+- [x] ArgoCD hiển thị toàn bộ app `Synced` + `Healthy`.
+- [x] Sửa Git → cụm Kubernetes tự động đồng bộ theo thời gian thực.
+- [x] Cơ chế Self-healing và GitOps hoàn chỉnh.
+
+---
+
+## GIAI ĐOẠN 5: INFRASTRUCTURE AS CODE (TERRAFORM + ANSIBLE)
 *(Đang chuẩn bị thực hiện)*

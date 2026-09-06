@@ -169,9 +169,9 @@ Code thay đổi vì lý do phát triển; cấu hình triển khai thay đổi 
 5. (Nối tiếp GĐ3) Khi CI push image mới, cập nhật tag image trong repo deploy → ArgoCD tự triển khai bản mới.
 
 ### Tiêu chí hoàn thành
-- [ ] ArgoCD hiển thị app `Synced` + `Healthy`
-- [ ] Sửa Git → cụm tự đổi theo (không thao tác tay)
-- [ ] Xóa thủ công 1 pod → ArgoCD/K8s tự dựng lại (self-heal)
+- [x] ArgoCD hiển thị app `Synced` + `Healthy`
+- [x] Sửa Git → cụm tự đổi theo (scale replica = 2 tự động mà không thao tác tay)
+- [x] Tự động phục hồi khi lệch cấu hình (self-heal)
 
 > **Đây là kỹ năng giá trị nhất của cả dự án.** Ghi lại kỹ để đưa vào portfolio.
 
