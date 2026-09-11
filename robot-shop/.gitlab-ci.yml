@@ -1,5 +1,6 @@
 stages:
   - test
+  - sonarqube
   - scan
   - build-and-push
 
@@ -7,6 +8,7 @@ variables:
   IMAGE_TAG: "$CI_REGISTRY_IMAGE/cart:$CI_COMMIT_SHORT_SHA"
   IMAGE_LATEST: "$CI_REGISTRY_IMAGE/cart:latest"
 
+# 1. TEST CÚ PHÁP
 test_cart:
   stage: test
   image: node:14-alpine
@@ -14,6 +16,24 @@ test_cart:
     - cd cart
     - node -c server.js
 
+# 2. PHÂN TÍCH CHẤT LƯỢNG MÃ & BẢO MẬT BẰNG SONARQUBE
+sonarqube_check:
+  stage: sonarqube
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  script:
+    - sonar-scanner
+  allow_failure: true
+
+# 3. QUÉT LỖ HỔNG DEPENDENCIES BẰNG TRIVY
 scan_cart:
   stage: scan
   image:
@@ -23,6 +43,7 @@ scan_cart:
     - trivy fs --severity HIGH,CRITICAL --format table cart/
   allow_failure: true
 
+# 4. BUILD VÀ PUSH DOCKER IMAGE
 build_and_push_cart:
   stage: build-and-push
   image: docker:latest

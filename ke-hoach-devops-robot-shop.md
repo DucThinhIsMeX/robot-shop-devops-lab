@@ -207,9 +207,10 @@ Code thay đổi vì lý do phát triển; cấu hình triển khai thay đổi 
 3. **HashiCorp Vault** (trên .106): thay các secret hard-code (mật khẩu DB, token) bằng secret lấy động từ Vault. Học cơ chế inject secret vào pod.
 
 ### Tiêu chí hoàn thành
-- [ ] Pipeline có stage SonarQube, fail khi code kém chất lượng
-- [ ] Trivy chặn image có lỗ hổng nghiêm trọng
-- [ ] Không còn mật khẩu nào nằm thô trong repo - tất cả qua Vault
+- [x] Pipeline có stage SonarQube, fail khi code kém chất lượng (Quality Gate: Passed)
+- [x] Trivy chặn image / dependencies có lỗ hổng nghiêm trọng
+- [x] Không còn mật khẩu nào nằm thô trong repo - tất cả quản lý và cấp phát qua HashiCorp Vault
+
 
 ---
 

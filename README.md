@@ -106,7 +106,7 @@ flowchart TD
 - [x] **Giai đoạn 3:** Xây dựng CI Pipeline tự động (Test syntax -> Scan Trivy DevSecOps -> Docker Build & Push với tag Commit SHA).
 - [x] **Giai đoạn 4:** Thiết lập GitOps Continuous Delivery với ArgoCD (Tự động đồng bộ và Self-healing).
 - [x] **Giai đoạn 5:** Infrastructure as Code (Tự động hóa cấu hình node bằng Ansible + Quản lý K8s bằng Terraform).
-- [ ] **Giai đoạn 6:** DevSecOps (SonarQube Quality Gate + HashiCorp Vault).
+- [x] **Giai đoạn 6:** DevSecOps (SonarQube SAST Quality Gate + Trivy SCA + HashiCorp Vault Secret Management).
 - [ ] **Giai đoạn 7:** Giám sát tập trung (Prometheus + Grafana + Loki gom log).
 - [ ] **Giai đoạn 8:** Load Balancer HAProxy & Kiểm thử tải với Locust.
 - [ ] **Giai đoạn 9:** Đóng gói tài liệu portfolio hoàn chỉnh.

@@ -198,5 +198,37 @@ Tài liệu này ghi chú chi tiết từng bước đã thực hiện, các quy
 
 ---
 
-## GIAI ĐOẠN 6: DEVSECOPS (TRIVY + SONARQUBE + VAULT)
-*(Đang chuẩn bị thực hiện)*
+## GIAI ĐOẠN 6: DEVSECOPS (TRIVY + SONARQUBE + HASHICORP VAULT)
+
+- **Thời gian thực hiện:** 11/09/2026
+- **Mục tiêu:** Nhúng bảo mật đa tầng vào vòng đời phát triển phần mềm (DevSecOps "Shift-Left"): Quét mã nguồn tĩnh (SAST), Quét lỗ hổng thư viện phụ thuộc (SCA), và Quản lý bí mật tập trung (Secret Management).
+
+### 1. Phân tích mã nguồn tĩnh bằng SonarQube (SAST)
+- **Hạ tầng:** Dựng container SonarQube trên máy ảo `database-server` (`192.168.180.106:9000`).
+- **Cấu hình:** Tạo project `robot-shop-cart`, cấu hình `sonar-project.properties` và tích hợp `sonar-scanner-cli` vào GitLab CI Pipeline (`.gitlab-ci.yml`) với các biến môi trường `SONAR_HOST_URL`, `SONAR_TOKEN`.
+- **Kết quả quét:** Pipeline CI quét tự động 346 dòng mã JavaScript của `cart`, xuất sắc đạt **Passed (Quality Gate)** với **0 Bugs**, **0 Vulnerabilities**, **27 Code Smells**.
+- **Sự cố mạng & Xử lý:**
+  - Container runner không clone được code qua domain nội bộ `gitlab.ducthinh.com`.
+  - Khắc phục bằng cách cấu hình `extra_hosts = ["gitlab.ducthinh.com:192.168.180.51"]` và `clone_url = "http://192.168.180.51"` trong `/etc/gitlab-runner/config.toml`, khởi động lại runner.
+
+### 2. Quét lỗ hổng phụ thuộc & mã nguồn bằng Trivy (SCA)
+- Tích hợp `aquasec/trivy` trong pipeline CI để quét toàn bộ file cấu hình và thư viện `node_modules`/`package.json` của service `cart`.
+- Tự động phát hiện và cảnh báo các CVE bảo mật mức `HIGH` và `CRITICAL` trước khi tiến hành đóng gói Docker image.
+
+### 3. Quản lý bí mật tập trung với HashiCorp Vault (Secret Management)
+- **Hạ tầng:** Triển khai HashiCorp Vault Server trên `database-server` (`192.168.180.106:8200`) với cờ lắng nghe mạng `0.0.0.0:8200` và Web UI.
+- **Tập trung hóa Secret:** Khởi tạo Secrets Engine Key/Value (v2) tại đường dẫn `secret/robot-shop/payment` lưu trữ an toàn các thông tin nhạy cảm (`PAYMENT_API_KEY`, `DB_PASSWORD`).
+- **Kiểm chứng API:** Gọi thành công Vault REST API để lấy JSON secret giải mã an toàn qua Token xác thực.
+- **Thiết kế ứng dụng thực chiến vào K8s:** Xây dựng mô hình **Init-Container (Sidecar Pattern)** chia sẻ RAM Volume (`emptyDir: medium: Memory`) để tự động "bơm" secret từ Vault vào Pod `payment` khi khởi động, loại bỏ hoàn toàn việc lưu mật khẩu thô trong Git và file cấu hình YAML.
+
+### 4. Đánh giá hoàn thành Giai đoạn 6
+- [x] Pipeline CI tích hợp SonarQube SAST đạt chuẩn Quality Gate Passed.
+- [x] Tích hợp Trivy quét lỗ hổng bảo mật tự động.
+- [x] Triển khai HashiCorp Vault, lưu trữ và bảo vệ secret tập trung qua REST API.
+- [x] Thiết kế mô hình Secret Injection an toàn cho Pods Kubernetes.
+
+---
+
+## GIAI ĐOẠN 7: OBSERVABILITY (GIÁM SÁT TOÀN DIỆN VỚI PROMETHEUS + GRAFANA + LOKI)
+*(Dự kiến thực hiện tiếp theo)*
+
