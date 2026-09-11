@@ -166,4 +166,37 @@ Tài liệu này ghi chú chi tiết từng bước đã thực hiện, các quy
 ---
 
 ## GIAI ĐOẠN 5: INFRASTRUCTURE AS CODE (TERRAFORM + ANSIBLE)
+
+- **Thời gian thực hiện:** 11/09/2026
+- **Mục tiêu:** Tự động hóa 100% việc chuẩn bị hệ điều hành các node (Ansible) và quản lý tài nguyên logic cụm K8s bằng mã khai báo (Terraform).
+
+### 1. Triển khai Ansible (Tầng Hệ điều hành & Node)
+- **Cấu trúc:** Xây dựng `inventory.ini`, `ansible.cfg`, và Playbook `setup-k8s-node.yml`.
+- **Cơ chế:** Node master `k8s-master-1` đóng vai trò Ansible Control Node, kết nối SSH đồng nhất tới cả 3 node.
+- **Các tác vụ tự động hóa:**
+  1. Tắt Swap vĩnh viễn trong `/etc/fstab`.
+  2. Nạp kernel modules `overlay`, `br_netfilter`.
+  3. Cấu hình sysctl chuyển tiếp mạng `net.ipv4.ip_forward = 1`.
+  4. Cài đặt các gói phụ trợ và cấu hình đồng bộ thời gian NTP (`chrony`).
+  5. Cài đặt Container Runtime `containerd` với cờ `SystemdCgroup = true`.
+  6. Thêm repository chính thức `pkgs.k8s.io` và cài đặt bộ ba `kubelet`, `kubeadm`, `kubectl` v1.30 kèm lệnh `hold` phiên bản.
+- **Sự cố & Xử lý:** Task kích hoạt dịch vụ `chrony` gặp lỗi khi chạy dry-run/service không tìm thấy. Khắc phục bằng cách chuẩn hóa sang module `service` đa năng với `failed_when: false`. Playbook chạy thành công `ok=12, changed=1, failed=0` trên toàn bộ 3 node.
+
+### 2. Triển khai Terraform (Tầng Kubernetes & Workload)
+- **Cấu trúc:** Xây dựng module Terraform gồm `versions.tf` (Kubernetes provider), `variables.tf`, `main.tf`, `outputs.tf`.
+- **Tài nguyên quản lý bằng code HCL:**
+  - `kubernetes_namespace`: Quản lý namespace `robot-shop` kèm metadata chuẩn.
+  - `kubernetes_resource_quota`: Thiết lập mức trần an toàn bảo vệ máy tính (Tối đa 8Gi RAM, 6 Cores CPU, tối đa 30 Pods).
+  - `kubernetes_limit_range`: Tự động gán cấu hình request/limit mặc định cho mọi container.
+- **Sự cố & Kỹ năng thực chiến:** Khi apply gặp lỗi `namespaces "robot-shop" already exists` do namespace đã có sẵn trước đó. Đã xử lý bằng kỹ thuật **`terraform import kubernetes_namespace.robot_shop robot-shop`** để đưa tài nguyên thực tế vào quản lý State của Terraform.
+- **Kiểm chứng:** Lệnh `kubectl describe resourcequota robot-shop-quota -n robot-shop` ghi nhận đầy đủ 12 Pods của Robot Shop đang nằm trong hạn mức 3536Mi / 8Gi RAM và 2400m / 6 Cores CPU.
+
+### 3. Đánh giá hoàn thành Giai đoạn 5
+- [x] Chạy Ansible playbook cấu hình được toàn bộ các node từ đầu.
+- [x] Quản lý thành công hạ tầng K8s (Namespace, ResourceQuota, LimitRange) bằng Terraform.
+- [x] Làm chủ kỹ thuật `terraform import` và quản lý trạng thái hạ tầng bằng code (IaC).
+
+---
+
+## GIAI ĐOẠN 6: DEVSECOPS (TRIVY + SONARQUBE + VAULT)
 *(Đang chuẩn bị thực hiện)*

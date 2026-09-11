@@ -1,0 +1,159 @@
+---
+# ==============================================================================
+# Playbook: Tự động hóa cấu hình và chuẩn bị Kubernetes Node (Ubuntu 22.04)
+# Áp dụng cho: Cả Master và Worker nodes
+# ==============================================================================
+
+- name: Chuẩn bị và Cấu hình hạ tầng Kubernetes Node
+  hosts: k8s_cluster
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. TẮT SWAP (Bắt buộc đối với Kubernetes)
+    # --------------------------------------------------------------------------
+    - name: Tắt swap tạm thời ngay lập tức
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+      changed_when: false
+
+    - name: Tắt swap vĩnh viễn trong /etc/fstab (không bật lại khi reboot)
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#].*?\sswap\s+.*)$'
+        replace: '# \1'
+
+    # --------------------------------------------------------------------------
+    # 2. NẠP KERNEL MODULES CHO MẠNG KUBERNETES
+    # --------------------------------------------------------------------------
+    - name: Tạo file nạp module mạng tự động khi khởi động
+      copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+        mode: '0644'
+
+    - name: Nạp module overlay vào nhân Linux
+      modprobe:
+        name: overlay
+        state: present
+
+    - name: Nạp module br_netfilter vào nhân Linux
+      modprobe:
+        name: br_netfilter
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 3. CẤU HÌNH SYSCTL CHO PHÉP CHUYỂN TIẾP GÓI TIN (BRIDGED TRAFFIC)
+    # --------------------------------------------------------------------------
+    - name: Thiết lập các tham số sysctl mạng K8s
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        state: present
+        reload: yes
+      loop:
+        - { key: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+        - { key: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+        - { key: 'net.ipv4.ip_forward', value: '1' }
+
+    # --------------------------------------------------------------------------
+    # 4. CÀI ĐẶT CÁC GÓI CƠ BẢN VÀ ĐỒNG BỘ THỜI GIAN NTP
+    # --------------------------------------------------------------------------
+    - name: Cài đặt các gói phụ trợ cần thiết
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - chrony
+        state: present
+        update_cache: yes
+
+    - name: Kích hoạt dịch vụ đồng bộ thời gian chrony
+      service:
+        name: chrony
+        state: started
+        enabled: yes
+      failed_when: false
+
+    # --------------------------------------------------------------------------
+    # 5. CẤU HÌNH CONTAINER RUNTIME (CONTAINERD)
+    # --------------------------------------------------------------------------
+    - name: Cài đặt containerd
+      apt:
+        name: containerd
+        state: present
+
+    - name: Tạo thư mục cấu hình cho containerd
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Sinh cấu hình mặc định containerd nếu chưa có
+      shell: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Kích hoạt SystemdCgroup = true trong containerd config
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: '^\s*SystemdCgroup\s*='
+        line: '            SystemdCgroup = true'
+      notify: Restart containerd
+
+    # --------------------------------------------------------------------------
+    # 6. THÊM KHO LƯU TRỮ VÀ CÀI ĐẶT KUBERNETES (v1.30)
+    # --------------------------------------------------------------------------
+    - name: Tạo thư mục chứa apt keyring
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Tải GPG key chính thức của Kubernetes
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: '0644'
+
+    - name: Chuyển đổi GPG key sang định dạng dearmor
+      shell: gpg --dearmor -y -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /etc/apt/keyrings/kubernetes-apt-keyring.asc
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Thêm kho APT Kubernetes v1.30
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /\n"
+        mode: '0644'
+
+    - name: Cài đặt kubelet, kubeadm và kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        update_cache: yes
+
+    - name: Khóa phiên bản (hold) kubelet, kubeadm, kubectl không cho tự nâng cấp
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+  handlers:
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+        enabled: yes

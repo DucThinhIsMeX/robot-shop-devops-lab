@@ -189,9 +189,9 @@ Code thay đổi vì lý do phát triển; cấu hình triển khai thay đổi 
 3. Lưu toàn bộ code IaC vào một repo riêng trên GitLab.
 
 ### Tiêu chí hoàn thành
-- [ ] Chạy Ansible playbook cấu hình được 1 node từ đầu
-- [ ] `terraform apply` / `destroy` dựng lại / xóa sạch namespace robot-shop
-- [ ] Không còn bước "bấm tay" nào trong việc dựng hạ tầng
+- [x] Chạy Ansible playbook cấu hình được 1 node từ đầu
+- [x] `terraform apply` / `import` quản lý namespace, ResourceQuota và LimitRange
+- [x] Không còn bước "bấm tay" nào trong việc dựng hạ tầng
 
 ---
 
