@@ -207,7 +207,9 @@ flowchart LR
 
 ---
 
-## 5. Luồng nghiệp vụ cốt lõi (Checkout & Order Dispatch Flow)
+## 5. Luồng nghiệp vụ cốt lõi
+
+### Quy trình đặt hàng & Điều phối (Checkout & Dispatch Flow)
 
 ```mermaid
 sequenceDiagram
