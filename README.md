@@ -207,9 +207,7 @@ flowchart LR
 
 ---
 
-## 5. Luồng nghiệp vụ cốt lõi
-
-### 5.1. Luồng mua hàng & Thanh toán (Checkout & Order Dispatch Flow)
+## 5. Luồng nghiệp vụ cốt lõi (Checkout & Order Dispatch Flow)
 
 ```mermaid
 sequenceDiagram
@@ -253,20 +251,6 @@ sequenceDiagram
     RMQ-->>Disp: Consume message từ hàng đợi 'orders'
     Disp->>Disp: Mô phỏng xử lý đơn hàng (Delay 42-84ms, Trace Span)
 ```
-
-### 5.2. Công thức tính cước vận chuyển (Haversine Formula)
-
-Kho hàng của Robot Shop được cố định tại **Solingen, Đức** (Tọa độ: `51.164896° B`, `7.068792° Đ`). Dịch vụ `shipping` tính khoảng cách tới tọa độ của thành phố nhận hàng theo công thức Haversine:
-
-$$d = 2R \times \arcsin \left( \sqrt{\sin^2\left(\frac{\Delta \varphi}{2}\right) + \cos(\varphi_1) \cos(\varphi_2) \sin^2\left(\frac{\Delta \lambda}{2}\right)} \right)$$
-
-*Trong đó $R = 6371\text{ km}$ là bán kính Trái Đất.*
-
-Cước vận chuyển được quy đổi theo khoảng cách:
-
-$$\text{Shipping Cost (USD)} = \frac{\operatorname{round}(\text{Distance (km)} \times 5)}{100}$$
-
-*(Ví dụ: Quãng đường $1000\text{ km} \rightarrow \text{Cước} = \frac{\operatorname{round}(1000 \times 5)}{100} = 50.00\text{ USD}$).*
 
 ---
 
