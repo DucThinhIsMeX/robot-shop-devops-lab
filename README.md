@@ -68,11 +68,11 @@ Hệ thống được xây dựng theo kiến trúc **Microservices phân tán**
 flowchart TD
     Client(["🌐 Trình duyệt / Client / Locust"]) -->|HTTP:8080| Web["🌐 web (Nginx + AngularJS) Gateway"]
 
-    subgraph Frontends & Reverse Proxy
+    subgraph Frontends ["Frontends & Reverse Proxy"]
         Web
     end
 
-    subgraph Core Microservices [Tầng Dịch Vụ Nghiệp Vụ]
+    subgraph CoreServices ["Tầng Dịch Vụ Nghiệp Vụ"]
         Catalogue["📦 catalogue (Node.js/Express)"]
         Cart["🛒 cart (Node.js/Express)"]
         User["👤 user (Node.js/Express)"]
@@ -82,11 +82,11 @@ flowchart TD
         Dispatch["📬 dispatch (Go Worker)"]
     end
 
-    subgraph Data & Messaging [Tầng Lưu Trữ & Hàng Đợi]
-        Mongo[("🍃 MongoDB\n(catalogue, users, orders)")]
-        Redis[("⚡ Redis\n(cart session, anonymous-id)")]
-        MySQL[("🐬 MySQL\n(cities, ratings)")]
-        RabbitMQ[["🐇 RabbitMQ\n(exchange: robot-shop, queue: orders)"]]
+    subgraph DataStorage ["Tầng Lưu Trữ & Hàng Đợi"]
+        Mongo[("🍃 MongoDB<br/>(catalogue, users, orders)")]
+        Redis[("⚡ Redis<br/>(cart session, anonymous-id)")]
+        MySQL[("🐬 MySQL<br/>(cities, ratings)")]
+        RabbitMQ[["🐇 RabbitMQ<br/>(exchange: robot-shop, queue: orders)"]]
     end
 
     %% Web routing
@@ -160,24 +160,25 @@ Hệ thống được cấu thành từ **8 microservices nghiệp vụ** đư�
 Hệ thống áp dụng mô hình **Polyglot Persistence**, mỗi loại dữ liệu được lưu trữ trên nền tảng phù hợp nhất với bản chất của nó:
 
 ```mermaid
-classDiagram
-    class MongoDB {
-        Database: catalogue (Collection: products)
-        Database: users (Collection: users, orders)
-    }
-    class MySQL {
-        Database: cities (Tables: code, cities)
-        Database: ratings (Table: ratings)
-    }
-    class Redis {
-        Key: <cart_id> (TTL 3600s)
-        Key: anonymous-counter (INCR)
-    }
-    class RabbitMQ {
-        Exchange: robot-shop (direct)
-        Queue: orders
-        RoutingKey: orders
-    }
+flowchart LR
+    subgraph MongoBox ["🍃 MongoDB (Tài liệu NoSQL)"]
+        M1["Database: catalogue<br/>• Collection: products"]
+        M2["Database: users<br/>• Collection: users<br/>• Collection: orders"]
+    end
+
+    subgraph MySQLBox ["🐬 MySQL (Cơ sở dữ liệu quan hệ)"]
+        S1["Database: cities<br/>• Table: code<br/>• Table: cities"]
+        S2["Database: ratings<br/>• Table: ratings"]
+    end
+
+    subgraph RedisBox ["⚡ Redis (In-Memory Key-Value)"]
+        R1["Key: cart_id (TTL: 3600s)"]
+        R2["Key: anonymous-counter (INCR)"]
+    end
+
+    subgraph RabbitBox ["🐇 RabbitMQ (Hàng đợi thông điệp)"]
+        Q1["Exchange: robot-shop (direct)<br/>• Routing key: orders<br/>• Queue: orders"]
+    end
 ```
 
 ### 4.1. Chi tiết các kho lưu trữ
@@ -241,16 +242,16 @@ sequenceDiagram
     Pay->>Usr: GET /check/{id} (Kiểm tra tài khoản tồn tại hay vãng lai)
     Pay->>Pay: Kiểm tra tính hợp lệ (Tổng tiền > 0, có SKU: SHIP)
     Pay->>Pay: HTTP GET paypal.com (Mô phỏng xác thực cổng ngoại vi)
-    Pay->>RMQ: Publish đơn hàng vào exchange "robot-shop" (Queue: "orders")
+    Pay->>RMQ: Publish đơn hàng vào exchange 'robot-shop' (Queue: orders)
     opt Khách có tài khoản
-        Pay->>Usr: POST /order/{id} (Lưu vào lịch sử đơn hàng trong MongoDB)
+        Pay->>Usr: POST /order/{id} (Lưu vào lịch sử đơn hàng MongoDB)
     end
     Pay->>Cart: DELETE /cart/{id} (Dọn dẹp giỏ hàng khỏi Redis)
     Pay-->>User: Trả về mã đơn hàng orderid (UUID)
 
     Note over RMQ, Disp: 4. Xử lý điều phối bất đồng bộ
-    RMQ-->>Disp: Consume message từ hàng đợi "orders"
-    Disp->>Disp: Mô phỏng đóng gói giao hàng (Delay 42-84ms, Trace Span)
+    RMQ-->>Disp: Consume message từ hàng đợi 'orders'
+    Disp->>Disp: Mô phỏng xử lý đơn hàng (Delay 42-84ms, Trace Span)
 ```
 
 ### 5.2. Công thức tính cước vận chuyển (Haversine Formula)
@@ -263,7 +264,9 @@ $$d = 2R \times \arcsin \left( \sqrt{\sin^2\left(\frac{\Delta \varphi}{2}\right)
 
 Cước vận chuyển được quy đổi theo khoảng cách:
 
-$$\text{Cước (USD)} = \frac{\operatorname{round}(\text{Khoảng cách (km)} \times 5)}{100}$$
+$$\text{Shipping Cost (USD)} = \frac{\operatorname{round}(\text{Distance (km)} \times 5)}{100}$$
+
+*(Ví dụ: Quãng đường $1000\text{ km} \rightarrow \text{Cước} = \frac{\operatorname{round}(1000 \times 5)}{100} = 50.00\text{ USD}$).*
 
 ---
 
@@ -485,10 +488,10 @@ Dự án tích hợp đầy đủ 3 trụ cột của khả năng quan sát (Thr
 
 ```mermaid
 graph LR
-    subgraph Observability
-        M["📊 Metrics\n(Prometheus /metrics)"]
-        T["🔍 Tracing\n(OpenTracing / Instana)"]
-        L["📜 Logging\n(Fluentd -> ELK)"]
+    subgraph Observability ["Khả năng quan sát"]
+        M["📊 Metrics<br/>(Prometheus /metrics)"]
+        T["🔍 Tracing<br/>(OpenTracing / Instana)"]
+        L["📜 Logging<br/>(Fluentd -> ELK)"]
     end
 ```
 
@@ -581,9 +584,9 @@ Dành cho các nhóm sinh viên và kỹ sư thực hiện **Đồ án chuyên n
 
 ```mermaid
 flowchart LR
-    A["Giai đoạn 1\nBảo mật & Cập nhật Code"] --> B["Giai đoạn 2\nCI/CD Pipeline Hoàn Chỉnh"]
-    B --> C["Giai đoạn 3\nKubernetes & GitOps"]
-    C --> D["Giai đoạn 4\nFull Observability & Chaos"]
+    A["Giai đoạn 1<br/>Bảo mật & Cập nhật Code"] --> B["Giai đoạn 2<br/>CI/CD Pipeline Hoàn Chỉnh"]
+    B --> C["Giai đoạn 3<br/>Kubernetes & GitOps"]
+    C --> D["Giai đoạn 4<br/>Full Observability & Chaos"]
 ```
 
 1. **Giai đoạn 1: Chuẩn hóa bảo mật & Tái cấu trúc Container**:
