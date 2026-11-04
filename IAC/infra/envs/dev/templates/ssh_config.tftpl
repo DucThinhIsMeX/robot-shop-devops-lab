@@ -1,0 +1,16 @@
+# File sinh tự động bởi Terraform. Dùng: ssh -F generated/ssh_config <tên-node>
+
+Host edge
+  HostName ${edge_public_ip}
+  User ${ssh_user}
+  IdentityFile ${ssh_key_path}
+  StrictHostKeyChecking accept-new
+%{ for name, ip in nodes ~}
+
+Host ${name}
+  HostName ${ip}
+  User ${ssh_user}
+  IdentityFile ${ssh_key_path}
+  ProxyJump edge
+  StrictHostKeyChecking accept-new
+%{ endfor ~}

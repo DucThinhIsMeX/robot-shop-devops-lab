@@ -1,0 +1,6 @@
+# Sao chép thành terraform.tfvars rồi sửa. File terraform.tfvars không commit lên Git.
+
+# IP public hiện tại của bạn, lấy bằng: curl -s https://checkip.amazonaws.com
+admin_cidrs = ["203.0.113.10/32"]
+
+ssh_private_key_path = "~/.ssh/labsuser.pem"
