@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dispatch
+  namespace: robot-shop
+  labels:
+    app: dispatch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dispatch
+  template:
+    metadata:
+      labels:
+        app: dispatch
+    spec:
+      containers:
+      - name: dispatch
+        image: robotshop/rs-dispatch:2.1.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: AMQP_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: AMQP_HOST
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+

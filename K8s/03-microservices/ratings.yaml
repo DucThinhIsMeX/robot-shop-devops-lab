@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ratings
+  namespace: robot-shop
+  labels:
+    app: ratings
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ratings
+  template:
+    metadata:
+      labels:
+        app: ratings
+    spec:
+      containers:
+      - name: ratings
+        image: robotshop/rs-ratings:2.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        env:
+        - name: PDO_URL
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: PDO_URL
+        - name: CATALOGUE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: CATALOGUE_URL
+        - name: APP_ENV
+          value: "prod"
+        livenessProbe:
+          httpGet:
+            path: /_health
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 300m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ratings
+  namespace: robot-shop
+  labels:
+    app: ratings
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: ratings
+

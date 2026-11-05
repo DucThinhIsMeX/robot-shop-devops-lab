@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment
+  namespace: robot-shop
+  labels:
+    app: payment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment
+  template:
+    metadata:
+      labels:
+        app: payment
+    spec:
+      containers:
+      - name: payment
+        image: robotshop/rs-payment:2.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: CART_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: CART_HOST
+        - name: USER_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: USER_HOST
+        - name: AMQP_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: AMQP_HOST
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 300m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment
+  namespace: robot-shop
+  labels:
+    app: payment
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: payment
+

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: robot-shop-config
+  namespace: robot-shop
+data:
+  # Cấu hình địa chỉ host chuyển tiếp cho API Gateway (web)
+  CATALOGUE_HOST: "catalogue"
+  USER_HOST: "user"
+  CART_HOST: "cart"
+  SHIPPING_HOST: "shipping"
+  PAYMENT_HOST: "payment"
+  RATINGS_HOST: "ratings"
+
+  # Cấu hình kết nối giữa các microservices và database/queue
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+  USER_MONGO_URL: "mongodb://mongodb:27017/users"
+  REDIS_HOST: "redis"
+  DB_HOST: "mysql"
+  CART_ENDPOINT: "cart:8080"
+  PDO_URL: "mysql:host=mysql;dbname=ratings;charset=utf8mb4"
+  CATALOGUE_URL: "http://catalogue:8080"
+  AMQP_HOST: "rabbitmq"
+

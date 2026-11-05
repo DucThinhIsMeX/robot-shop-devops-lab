@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping
+  namespace: robot-shop
+  labels:
+    app: shipping
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping
+  template:
+    metadata:
+      labels:
+        app: shipping
+    spec:
+      containers:
+      - name: shipping
+        image: robotshop/rs-shipping:2.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: DB_HOST
+        - name: CART_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: robot-shop-config
+              key: CART_ENDPOINT
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 768Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping
+  namespace: robot-shop
+  labels:
+    app: shipping
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: shipping
+
