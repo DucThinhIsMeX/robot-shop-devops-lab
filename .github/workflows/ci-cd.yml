@@ -59,7 +59,7 @@ jobs:
 
   # =========================================================================
   # STAGE 3: DOCKER BUILD & COMPILATION
-  # Đóng gói ứng dụng thành Docker Image với nhãn Git Short SHA
+  # Đóng gói ứng dụng thành Docker Image cục bộ và kiểm tra tính toàn vẹn
   # =========================================================================
   stage-3-docker-build:
     name: "3. Build Docker Image"
@@ -72,16 +72,11 @@ jobs:
       - name: 3.2. Set Git Short SHA
         run: echo "SHA_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
 
-      - name: 3.3. Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 3.4. Build Local Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./web
-          push: false
-          load: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:${{ env.SHA_SHORT }}
+      - name: 3.3. Build Local Docker Image
+        run: |
+          echo "Đang build thử nghiệm Docker Image cục bộ..."
+          docker build -t rs-web:${{ env.SHA_SHORT }} ./web
+          echo " Đóng gói Docker Image rs-web:${{ env.SHA_SHORT }} thành công!"
 
   # =========================================================================
   # STAGE 4: PUBLISH TO REGISTRY (Docker Hub)
@@ -98,23 +93,20 @@ jobs:
       - name: 4.2. Set Git Short SHA
         run: echo "SHA_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
 
-      - name: 4.3. Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 4.4. Log in to Docker Hub
+      - name: 4.3. Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME || 'ducthinhahihi' }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: 4.5. Push Image to Docker Hub
-        uses: docker/build-push-action@v5
-        with:
-          context: ./web
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:${{ env.SHA_SHORT }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:latest
+      - name: 4.4. Build & Push Image to Docker Hub
+        run: |
+          DOCKER_USER="${{ secrets.DOCKERHUB_USERNAME || 'ducthinhahihi' }}"
+          echo "Đang đóng gói và push lên Docker Hub: ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }}..."
+          docker build -t ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }} -t ${DOCKER_USER}/rs-web:latest ./web
+          docker push ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }}
+          docker push ${DOCKER_USER}/rs-web:latest
+          echo " Đã phát hành ${DOCKER_USER}/rs-web lên Docker Hub thành công!"
 
   # =========================================================================
   # STAGE 5: GITOPS HANDOFF & AUTO-SYNC
@@ -135,8 +127,9 @@ jobs:
 
       - name: 5.3. Update K8s Manifest Image Tag
         run: |
-          sed -i "s|image: .*rs-web:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:${{ env.SHA_SHORT }}|g" K8s/04-gateway/web.yaml
-          echo "Đã cập nhật K8s/04-gateway/web.yaml trỏ về tag: ${{ env.SHA_SHORT }}"
+          DOCKER_USER="${{ secrets.DOCKERHUB_USERNAME || 'ducthinhahihi' }}"
+          sed -i "s|image: .*rs-web:.*|image: ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }}|g" K8s/04-gateway/web.yaml
+          echo " Đã cập nhật K8s/04-gateway/web.yaml trỏ về tag: ${{ env.SHA_SHORT }}"
 
       - name: 5.4. Commit & Push Updated Manifest (GitOps Trigger)
         run: |
