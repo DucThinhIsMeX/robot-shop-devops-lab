@@ -73,6 +73,17 @@
         --wait --timeout 5m
       changed_when: true
 
+    # ---------- StorageClass & Local Path Provisioner (Hỗ trợ PV / PVC) ----------
+    - name: Cài đặt Rancher Local Path Provisioner để cấp phát PV/PVC
+      ansible.builtin.command: >
+        kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+      changed_when: true
+
+    - name: Đặt local-path làm StorageClass mặc định của cụm
+      ansible.builtin.command: >
+        kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+      changed_when: true
+
     # ---------- Gateway API và Traefik (thay cho ingress-nginx đã ngừng phát triển) ----------
     - name: Cài CRD Gateway API (kênh standard)
       ansible.builtin.command: >
