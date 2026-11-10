@@ -1,12 +1,11 @@
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: redis
   namespace: robot-shop
   labels:
     app: redis
 spec:
-  serviceName: redis
   replicas: 1
   selector:
     matchLabels:
@@ -22,9 +21,6 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6379
-        volumeMounts:
-        - name: redis-data
-          mountPath: /data
         resources:
           limits:
             cpu: 200m
@@ -32,15 +28,6 @@ spec:
           requests:
             cpu: 50m
             memory: 64Mi
-  volumeClaimTemplates:
-  - metadata:
-      name: redis-data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      storageClassName: local-path
-      resources:
-        requests:
-          storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -55,4 +42,3 @@ spec:
     targetPort: 6379
   selector:
     app: redis
-

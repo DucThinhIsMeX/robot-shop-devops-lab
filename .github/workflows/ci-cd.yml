@@ -1,0 +1,61 @@
+name: CI/CD Pipeline - Robot Shop
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ci-cd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-push-web:
+    name: Build & Push Web Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 2. Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 3. Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 4. Extract Git Short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: 5. Build and Push Web Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:${{ steps.vars.outputs.sha_short }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:latest
+
+      - name: 6. Update K8s Manifest Image Tag
+        run: |
+          sed -i "s|image: .*rs-web:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/rs-web:${{ steps.vars.outputs.sha_short }}|g" K8s/04-gateway/web.yaml
+
+      - name: 7. Commit & Push Updated Manifest (GitOps Trigger)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add K8s/04-gateway/web.yaml
+          if git diff --staged --quiet; then
+            echo "Khong co thay doi trong manifest."
+          else
+            git commit -m "chore(gitops): auto-update web image to ${{ steps.vars.outputs.sha_short }} [skip ci]"
+            git push origin main
+          fi
+
