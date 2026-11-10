@@ -37,6 +37,7 @@ ENV CATALOGUE_HOST=catalogue \
 COPY --from=build /instana/*.so /tmp/
 
 COPY entrypoint.sh /root/
+RUN chmod +x /root/entrypoint.sh
 ENTRYPOINT ["/root/entrypoint.sh"]
 
 COPY default.conf.template /etc/nginx/conf.d/default.conf.template
