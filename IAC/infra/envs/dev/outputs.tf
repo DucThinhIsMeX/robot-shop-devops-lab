@@ -24,9 +24,9 @@ output "ecr_repository_urls" {
   value = module.ecr.repository_urls
 }
 
-output "backup_bucket" {
-  value = module.s3_backup.bucket_name
-}
+# output "backup_bucket" {
+#   value = module.s3_backup.bucket_name
+# }
 
 output "secret_names" {
   value = module.secrets.secret_names

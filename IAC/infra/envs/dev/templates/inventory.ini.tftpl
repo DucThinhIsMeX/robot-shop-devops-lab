@@ -22,4 +22,4 @@ ansible_user=${ssh_user}
 ansible_ssh_private_key_file=${ssh_key_path}
 
 [k8s_cluster:vars]
-ansible_ssh_common_args='-o ProxyJump=${ssh_user}@${edge_public_ip} -o StrictHostKeyChecking=accept-new'
+ansible_ssh_common_args='-o ProxyCommand="ssh -W %h:%p -q -o StrictHostKeyChecking=accept-new -i ${ssh_key_path} ${ssh_user}@${edge_public_ip}" -o StrictHostKeyChecking=accept-new'

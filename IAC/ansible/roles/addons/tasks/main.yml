@@ -1,0 +1,112 @@
+- name: Các addon của cụm
+  environment:
+    KUBECONFIG: "{{ kubeconfig_admin }}"
+  block:
+    # ---------- Helm ----------
+    - name: Tải Helm
+      ansible.builtin.unarchive:
+        src: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        dest: /tmp
+        remote_src: true
+        creates: /tmp/linux-amd64/helm
+
+    - name: Cài Helm
+      ansible.builtin.copy:
+        src: /tmp/linux-amd64/helm
+        dest: /usr/local/bin/helm
+        remote_src: true
+        mode: "0755"
+
+    # ---------- Calico (CNI), chế độ VXLAN ----------
+    - name: File values cho Calico
+      ansible.builtin.template:
+        src: calico-values.yaml.j2
+        dest: /etc/kubernetes/calico-values.yaml
+        mode: "0644"
+
+    - name: Cài Calico bằng Tigera operator
+      ansible.builtin.command: >
+        helm upgrade --install calico
+        https://github.com/projectcalico/calico/releases/download/{{ calico_version }}/tigera-operator-{{ calico_version }}.tgz
+        --namespace tigera-operator --create-namespace
+        --values /etc/kubernetes/calico-values.yaml
+        --wait --timeout 10m
+      changed_when: true
+
+    - name: Chờ mọi node Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready nodes --all --timeout=60s
+      register: addons_nodes_ready
+      until: addons_nodes_ready.rc == 0
+      retries: 20
+      delay: 15
+      changed_when: false
+
+    # ---------- Duyệt chứng chỉ phục vụ của kubelet (serverTLSBootstrap) ----------
+    - name: Duyệt CSR kubelet-serving của mọi node
+      ansible.builtin.shell: |
+        set -o pipefail
+        want={{ groups['k8s_cluster'] | length }}
+        list() {
+          kubectl get csr --no-headers \
+            -o custom-columns='NAME:.metadata.name,SIGNER:.spec.signerName,STATUS:.status.conditions[*].type'
+        }
+        for i in $(seq 1 30); do
+          list | awk '$2=="kubernetes.io/kubelet-serving" && $3=="<none>" {print $1}' \
+            | xargs -r kubectl certificate approve
+          got=$(list | awk '$2=="kubernetes.io/kubelet-serving" && $3 ~ /Approved/' | wc -l)
+          [ "$got" -ge "$want" ] && exit 0
+          sleep 10
+        done
+        echo "Chỉ duyệt được $got/$want CSR" >&2
+        exit 1
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    # ---------- metrics-server (cần cho HPA) ----------
+    - name: Cài metrics-server
+      ansible.builtin.command: >
+        helm upgrade --install metrics-server metrics-server
+        --repo https://kubernetes-sigs.github.io/metrics-server/
+        --version {{ metrics_server_chart_version }}
+        --namespace kube-system
+        --wait --timeout 5m
+      changed_when: true
+
+    # ---------- Gateway API và Traefik (thay cho ingress-nginx đã ngừng phát triển) ----------
+    - name: Cài CRD Gateway API (kênh standard)
+      ansible.builtin.command: >
+        kubectl apply --server-side
+        -f https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ gateway_api_version }}/standard-install.yaml
+      changed_when: true
+
+    - name: File values cho Traefik
+      ansible.builtin.template:
+        src: traefik-values.yaml.j2
+        dest: /etc/kubernetes/traefik-values.yaml
+        mode: "0644"
+
+    - name: Cài Traefik dạng NodePort, khớp target group của NLB
+      ansible.builtin.command: >
+        helm upgrade --install traefik traefik
+        --repo https://traefik.github.io/charts
+        --version {{ traefik_chart_version }}
+        --namespace traefik --create-namespace
+        --values /etc/kubernetes/traefik-values.yaml
+        --wait --timeout 5m
+      changed_when: true
+
+- name: Lấy kubeconfig về máy điều khiển
+  ansible.builtin.fetch:
+    src: "{{ kubeconfig_admin }}"
+    dest: "{{ local_kubeconfig }}"
+    flat: true
+
+- name: Trỏ kubeconfig về đường hầm SSH 127.0.0.1:6443
+  ansible.builtin.replace:
+    path: "{{ local_kubeconfig }}"
+    regexp: 'server: https://.*:6443'
+    replace: 'server: https://127.0.0.1:6443'
+    mode: "0600"
+  delegate_to: localhost
+  become: false

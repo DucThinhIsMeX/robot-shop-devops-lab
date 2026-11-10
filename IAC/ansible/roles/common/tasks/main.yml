@@ -1,0 +1,155 @@
+# ---------- Hệ điều hành ----------
+- name: Tắt swap (kubelet không chạy khi có swap)
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb | int > 0
+  changed_when: true
+
+- name: Bỏ swap khỏi fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+
+- name: Nạp module kernel khi khởi động
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    mode: "0644"
+
+- name: Nạp module kernel ngay
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: [overlay, br_netfilter]
+
+- name: Tham số sysctl cho mạng Kubernetes
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+    reload: true
+  loop:
+    - { key: net.bridge.bridge-nf-call-iptables, value: "1" }
+    - { key: net.bridge.bridge-nf-call-ip6tables, value: "1" }
+    - { key: net.ipv4.ip_forward, value: "1" }
+
+- name: Gói cơ bản
+  ansible.builtin.apt:
+    name: [apt-transport-https, ca-certificates, curl, gpg, conntrack, socat, jq]
+    state: present
+    update_cache: true
+    lock_timeout: 300
+
+# ---------- containerd 2.x (Kubernetes 1.36 không còn hỗ trợ containerd 1.x) ----------
+- name: Tải containerd
+  ansible.builtin.get_url:
+    url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+    dest: "/tmp/containerd-{{ containerd_version }}.tar.gz"
+    mode: "0644"
+
+- name: Giải nén containerd vào /usr/local
+  ansible.builtin.unarchive:
+    src: "/tmp/containerd-{{ containerd_version }}.tar.gz"
+    dest: /usr/local
+    remote_src: true
+    creates: /usr/local/bin/containerd
+  notify: Restart containerd
+
+- name: Cài systemd unit của containerd
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/containerd/containerd/v{{ containerd_version }}/containerd.service"
+    dest: /etc/systemd/system/containerd.service
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Cài runc
+  ansible.builtin.get_url:
+    url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64"
+    dest: /usr/local/sbin/runc
+    mode: "0755"
+
+- name: Tạo thư mục CNI
+  ansible.builtin.file:
+    path: /opt/cni/bin
+    state: directory
+    mode: "0755"
+
+- name: Cài CNI plugins
+  ansible.builtin.unarchive:
+    src: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_plugins_version }}/cni-plugins-linux-amd64-v{{ cni_plugins_version }}.tgz"
+    dest: /opt/cni/bin
+    remote_src: true
+    creates: /opt/cni/bin/loopback
+
+- name: Thư mục cấu hình containerd
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: "0755"
+
+- name: Cấu hình containerd dùng systemd cgroup
+  ansible.builtin.template:
+    src: containerd-config.toml.j2
+    dest: /etc/containerd/config.toml
+    mode: "0644"
+  notify: Restart containerd
+
+- name: Bật containerd
+  ansible.builtin.systemd_service:
+    name: containerd
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Cấu hình crictl
+  ansible.builtin.copy:
+    dest: /etc/crictl.yaml
+    content: |
+      runtime-endpoint: unix:///run/containerd/containerd.sock
+      image-endpoint: unix:///run/containerd/containerd.sock
+    mode: "0644"
+
+- name: Áp dụng thay đổi containerd trước khi cài kubelet
+  ansible.builtin.meta: flush_handlers
+
+# ---------- kubeadm, kubelet, kubectl ----------
+- name: Thư mục keyring của apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Khóa ký của kho pkgs.k8s.io
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: "0644"
+
+- name: Kho apt của Kubernetes {{ k8s_minor }}
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v{{ k8s_minor }}/deb/ /"
+    filename: kubernetes
+    state: present
+
+- name: Cài kubelet, kubeadm, kubectl
+  ansible.builtin.apt:
+    name:
+      - "kubelet={{ k8s_minor }}.*"
+      - "kubeadm={{ k8s_minor }}.*"
+      - "kubectl={{ k8s_minor }}.*"
+    state: present
+    update_cache: true
+    lock_timeout: 300
+
+- name: Giữ phiên bản, tránh bị nâng cấp ngoài ý muốn
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: [kubelet, kubeadm, kubectl]
+
+- name: Bật kubelet
+  ansible.builtin.systemd_service:
+    name: kubelet
+    enabled: true

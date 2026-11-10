@@ -1,0 +1,23 @@
+# ---------- Phiên bản (kiểm tra lại trước mỗi lần dựng mới) ----------
+# Kubernetes 1.36: hỗ trợ tới 28-6-2027. Từ 1.36 bắt buộc containerd 2.x.
+k8s_minor: "1.36"
+containerd_version: "2.3.7"
+runc_version: "1.4.3"
+cni_plugins_version: "1.9.1"
+calico_version: "v3.33.0"
+helm_version: "v4.3.1"
+metrics_server_chart_version: "3.14.0"
+gateway_api_version: "v1.6.3"
+traefik_chart_version: "42.3.0"
+
+# ---------- Mạng của cụm (không được trùng VPC 10.0.0.0/16) ----------
+pod_cidr: "192.168.0.0/16"
+service_cidr: "10.96.0.0/12"
+
+# ---------- NodePort của ingress, phải khớp target group NLB trong Terraform ----------
+ingress_http_node_port: 30080
+ingress_https_node_port: 30443
+
+# ---------- Khác ----------
+kubeconfig_admin: /etc/kubernetes/admin.conf
+local_kubeconfig: "{{ playbook_dir }}/generated/kubeconfig"

@@ -85,13 +85,13 @@ variable "k8s_nodes" {
 
 # ---------- Ingress ----------
 variable "ingress_http_node_port" {
-  description = "NodePort HTTP của ingress-nginx, phải khớp khi cài Helm chart ingress-nginx"
+  description = "NodePort HTTP của Traefik, phải khớp group_vars của Ansible"
   type        = number
   default     = 30080
 }
 
 variable "ingress_https_node_port" {
-  description = "NodePort HTTPS của ingress-nginx"
+  description = "NodePort HTTPS của Traefik"
   type        = number
   default     = 30443
 }

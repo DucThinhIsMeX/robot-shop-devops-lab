@@ -18,7 +18,7 @@ infra/
     ├── security/         # Security group cho edge, NLB, node Kubernetes
     ├── edge/             # EC2 NAT + bastion, Elastic IP, route 0.0.0.0/0 cho private
     ├── k8s-nodes/        # Master và worker, IP private cố định
-    ├── nlb/              # NLB 80/443 -> NodePort ingress-nginx trên worker
+    ├── nlb/              # NLB 80/443 -> NodePort Traefik trên worker
     ├── ecr/              # 10 repository image, quét khi push, tag bất biến
     ├── s3-backup/        # Bucket backup cơ sở dữ liệu
     └── secrets/          # Mật khẩu ngẫu nhiên lưu trong Secrets Manager
@@ -34,7 +34,7 @@ infra/
 | k8s-worker-2 | Private 10.0.11.0/24 | 10.0.11.22 | t3.large |
 
 Khi dựng cụm bằng kubeadm, dùng pod CIDR `192.168.0.0/16` (Calico chế độ VXLAN) để không trùng dải VPC.
-Cài ingress-nginx dạng NodePort với cổng `30080` (HTTP) và `30443` (HTTPS) để khớp NLB.
+Ansible cài Traefik dạng NodePort với cổng `30080` (HTTP) và `30443` (HTTPS) để khớp NLB.
 
 ## Ràng buộc Learner Lab đã tính đến
 
@@ -108,6 +108,6 @@ Giá on-demand us-east-1, chưa gồm dữ liệu truyền ra Internet và Secre
 ## Lưu ý
 
 - Mật khẩu do module `secrets` sinh ra nằm trong Terraform state. Bucket state đã bật mã hóa và chặn truy cập công khai; không chia sẻ state.
-- Target group của NLB tắt giữ IP client (`preserve_client_ip = false`) để rule security group tham chiếu `sg-nlb` hoạt động ổn định. Ingress-nginx vì vậy thấy IP của NLB, không phải IP người dùng.
+- Target group của NLB tắt giữ IP client (`preserve_client_ip = false`) để rule security group tham chiếu `sg-nlb` hoạt động ổn định. Traefik vì vậy thấy IP của NLB, không phải IP người dùng.
 - Node đặt `http_put_response_hop_limit = 2` để pod (EBS CSI driver, External Secrets Operator) dùng được quyền của `LabInstanceProfile` qua IMDS. Trong môi trường thật nên dùng IRSA hoặc Pod Identity thay cho cách này.
 - Nếu tài khoản Learner Lab không đọc được instance profile qua API, thay data source `aws_iam_instance_profile` bằng chuỗi `"LabInstanceProfile"` trong `envs/dev/main.tf`.

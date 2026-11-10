@@ -16,6 +16,6 @@ variable "admin_cidrs" {
 }
 
 variable "ingress_node_ports" {
-  description = "NodePort HTTP và HTTPS của ingress-nginx"
+  description = "NodePort HTTP và HTTPS của ingress controller (Traefik)"
   type        = list(number)
 }

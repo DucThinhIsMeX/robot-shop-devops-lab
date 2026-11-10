@@ -1,0 +1,47 @@
+# Dựng cụm Kubernetes bằng kubeadm trên hạ tầng do Terraform tạo.
+# Chạy: ansible-playbook site.yml
+
+- name: Chờ edge sẵn sàng (NAT cho private subnet)
+  hosts: edge
+  gather_facts: false
+  tasks:
+    - name: Chờ SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+    - name: Chờ cloud-init cấu hình NAT xong
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+
+- name: Chuẩn bị mọi node
+  hosts: k8s_cluster
+  gather_facts: false
+  become: true
+  pre_tasks:
+    - name: Chờ SSH qua bastion
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+    - name: Chờ cloud-init xong
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+    - name: Thu thập thông tin máy
+      ansible.builtin.setup:
+  roles:
+    - common
+
+- name: Khởi tạo control plane
+  hosts: masters
+  become: true
+  roles:
+    - control_plane
+
+- name: Worker gia nhập cụm
+  hosts: workers
+  become: true
+  roles:
+    - worker
+
+- name: Cài các thành phần bổ sung
+  hosts: masters
+  become: true
+  roles:
+    - addons

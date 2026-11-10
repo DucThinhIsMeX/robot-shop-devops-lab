@@ -1,6 +1,6 @@
-# State lưu trên S3 (tạo bằng thư mục bootstrap), khóa bằng file .tflock trên S3.
-# Cấu hình chi tiết nằm trong backend.hcl:
-#   terraform init -backend-config=backend.hcl
+# Lưu trạng thái hạ tầng (terraform.tfstate) ngay tại máy cục bộ
 terraform {
-  backend "s3" {}
+  backend "local" {
+    path = "terraform.tfstate"
+  }
 }

@@ -1,113 +1,82 @@
-# Hạ tầng AWS cho Robot Shop (Terraform)
+# Dựng cụm Kubernetes bằng Ansible và kubeadm
 
-Dựng hạ tầng cho cụm Kubernetes tự quản (kubeadm) trên AWS Academy Learner Lab:
-1 AZ, edge node làm NAT và bastion, 1 master, 2 worker cố định, NLB, ECR, S3 backup, Secrets Manager.
+Playbook đọc inventory do Terraform sinh ra, rồi dựng cụm 1 master, 2 worker trên hạ tầng AWS đã có.
+Một lệnh `ansible-playbook site.yml` đi từ máy trống tới cụm chạy được, kèm CNI, metrics-server và ingress.
 
-Terraform chỉ dựng hạ tầng. Cài containerd, kubeadm và dựng cụm do Ansible làm,
-dùng file inventory mà Terraform sinh ra trong `envs/dev/generated/`.
+## Thành phần được cài
+
+| Thành phần | Phiên bản | Vai trò |
+| --- | --- | --- |
+| Kubernetes (kubeadm, kubelet, kubectl) | 1.36 | Hỗ trợ tới 28-6-2027 |
+| containerd | 2.3.7 | Container runtime; Kubernetes từ 1.36 không còn hỗ trợ containerd 1.x |
+| runc | 1.4.3 | Runtime cấp thấp cho containerd |
+| CNI plugins | 1.9.1 | Plugin mạng cơ bản |
+| Calico (Tigera operator) | v3.33.0 | CNI, chế độ VXLAN, pod CIDR 192.168.0.0/16 |
+| Helm | v4.3.1 | Cài các chart trên master |
+| metrics-server | chart 3.14.0 | Số liệu CPU, RAM cho HPA |
+| Gateway API CRD | v1.6.3 | API định tuyến thế hệ mới |
+| Traefik | chart 42.3.0 | Ingress controller, hỗ trợ cả Ingress lẫn Gateway API; NodePort 30080, 30443 khớp NLB |
+
+Phiên bản khai báo ở `group_vars/all.yml`. Kiểm tra lại trước mỗi lần dựng mới.
+
+Traefik thay cho ingress-nginx vì dự án ingress-nginx đã ngừng phát triển từ tháng 3-2026, không còn bản vá bảo mật.
 
 ## Cấu trúc
 
 ```
-infra/
-├── bootstrap/            # S3 bucket chứa Terraform state, chạy một lần
-├── envs/dev/             # Môi trường dev: gọi các module
-│   └── templates/        # Mẫu inventory Ansible và ssh config
-└── modules/
-    ├── network/          # VPC, 2 subnet, IGW, 2 route table, S3 gateway endpoint
-    ├── security/         # Security group cho edge, NLB, node Kubernetes
-    ├── edge/             # EC2 NAT + bastion, Elastic IP, route 0.0.0.0/0 cho private
-    ├── k8s-nodes/        # Master và worker, IP private cố định
-    ├── nlb/              # NLB 80/443 -> NodePort ingress-nginx trên worker
-    ├── ecr/              # 10 repository image, quét khi push, tag bất biến
-    ├── s3-backup/        # Bucket backup cơ sở dữ liệu
-    └── secrets/          # Mật khẩu ngẫu nhiên lưu trong Secrets Manager
+ansible/
+├── ansible.cfg              # inventory trỏ tới ../infra/envs/dev/generated/inventory.ini
+├── group_vars/all.yml       # phiên bản, CIDR, NodePort
+├── site.yml                 # dựng cụm
+├── reset.yml                # gỡ cụm để dựng lại, giữ nguyên hạ tầng
+├── requirements.yml         # collection Ansible cần cài
+└── roles/
+    ├── common/              # swap, kernel module, sysctl, containerd, runc, CNI, kubeadm
+    ├── control_plane/       # kubeadm init, kubeconfig, sinh lệnh join
+    ├── worker/              # kubeadm join
+    └── addons/              # Helm, Calico, duyệt CSR kubelet, metrics-server, Gateway API, Traefik
 ```
 
-## Địa chỉ cố định
-
-| Máy | Subnet | IP private | Loại |
-| --- | --- | --- | --- |
-| edge | Public 10.0.1.0/24 | 10.0.1.10 | t3.small |
-| k8s-master | Private 10.0.11.0/24 | 10.0.11.10 | t3.medium |
-| k8s-worker-1 | Private 10.0.11.0/24 | 10.0.11.21 | t3.large |
-| k8s-worker-2 | Private 10.0.11.0/24 | 10.0.11.22 | t3.large |
-
-Khi dựng cụm bằng kubeadm, dùng pod CIDR `192.168.0.0/16` (Calico chế độ VXLAN) để không trùng dải VPC.
-Cài ingress-nginx dạng NodePort với cổng `30080` (HTTP) và `30443` (HTTPS) để khớp NLB.
-
-## Ràng buộc Learner Lab đã tính đến
-
-- Region `us-east-1`. AZ mặc định `us-east-1a`.
-- Không tạo IAM role: mọi EC2 dùng `LabInstanceProfile`, key pair dùng `vockey` có sẵn.
-- Credential tạm thời: mỗi phiên lab, chép lại nội dung "AWS Details > AWS CLI" vào `~/.aws/credentials`.
-- Secret xóa ngay khi destroy (`recovery_window_in_days = 0`), ECR và bucket backup cho phép xóa khi còn dữ liệu, để dựng lại nhiều lần không vướng trùng tên.
+Thư mục `ansible/` đặt cạnh `infra/` trong cùng repo.
 
 ## Cách chạy
 
-Yêu cầu: Terraform 1.10 trở lên, AWS CLI, file khóa `labsuser.pem` tải từ Learner Lab.
-
-**1. Tạo bucket chứa state (chỉ làm một lần)**
+Yêu cầu trên máy điều khiển: Ansible 2.16 trở lên, file khóa `labsuser.pem`, đã chạy `terraform apply` để có `generated/inventory.ini`.
 
 ```bash
-cd infra/bootstrap
-terraform init
-terraform apply
-# ghi lại output state_bucket
+cd ansible
+ansible-galaxy collection install -r requirements.yml
+ansible all -m ping                 # kiểm tra kết nối qua bastion
+ansible-playbook site.yml           # khoảng 10-15 phút
 ```
 
-**2. Cấu hình môi trường dev**
+## Dùng kubectl từ máy của bạn
+
+Playbook lưu kubeconfig vào `generated/kubeconfig`, trỏ tới `127.0.0.1:6443`. Mở đường hầm SSH tới API server qua edge rồi dùng như bình thường:
 
 ```bash
-cd ../envs/dev
-cp backend.hcl.example backend.hcl            # điền tên bucket vừa tạo
-cp terraform.tfvars.example terraform.tfvars  # điền IP public của bạn
-chmod 400 ~/.ssh/labsuser.pem
+ssh -F ../infra/envs/dev/generated/ssh_config -fN -L 6443:10.0.11.10:6443 edge
+export KUBECONFIG=$PWD/generated/kubeconfig
+kubectl get nodes -o wide
+kubectl top nodes
 ```
 
-**3. Dựng hạ tầng**
+Chứng chỉ của API server đã có `127.0.0.1` trong danh sách SAN, nên kết nối qua đường hầm không bị lỗi xác thực.
+
+## Kiểm tra sau khi dựng
 
 ```bash
-terraform init -backend-config=backend.hcl
-terraform validate
-terraform plan -out tfplan
-terraform apply tfplan
+kubectl get nodes                          # 3 node Ready
+kubectl get pods -A                        # calico, metrics-server, traefik Running
+kubectl get svc -n traefik                 # NodePort 30080, 30443
+curl -I http://$(cd ../infra/envs/dev && terraform output -raw nlb_dns_name | sed 's#http://##')
 ```
 
-**4. Kiểm tra**
+Lệnh `curl` cuối trả về `404` từ Traefik là đúng: NLB đã thông tới Traefik, chỉ chưa có ứng dụng nào được định tuyến.
 
-```bash
-ssh -F generated/ssh_config edge               # vào bastion
-ssh -F generated/ssh_config k8s-master         # vào master qua bastion
-ssh -F generated/ssh_config k8s-master 'curl -sI https://github.com | head -1'   # NAT hoạt động
-```
+## Ghi chú thiết kế
 
-**5. Dọn khi nghỉ dài ngày**
-
-```bash
-terraform destroy
-```
-
-NLB, Elastic IP và ổ EBS vẫn tính tiền khi EC2 đã dừng, nên nghỉ dài thì destroy.
-Không destroy thư mục `bootstrap`, vì state nằm trong đó.
-
-## Chi phí ước tính khi chạy
-
-| Thành phần | USD/giờ |
-| --- | --- |
-| 1 x t3.medium (master) | 0,042 |
-| 2 x t3.large (worker) | 0,166 |
-| 1 x t3.small (edge) | 0,021 |
-| NLB | ~0,023 + LCU |
-| 2 IPv4 public (edge, NLB) | ~0,010 |
-| EBS gp3 ~120 GB | ~0,013 |
-| **Tổng** | **~0,28** |
-
-Giá on-demand us-east-1, chưa gồm dữ liệu truyền ra Internet và Secrets Manager (0,40 USD/secret/tháng).
-
-## Lưu ý
-
-- Mật khẩu do module `secrets` sinh ra nằm trong Terraform state. Bucket state đã bật mã hóa và chặn truy cập công khai; không chia sẻ state.
-- Target group của NLB tắt giữ IP client (`preserve_client_ip = false`) để rule security group tham chiếu `sg-nlb` hoạt động ổn định. Ingress-nginx vì vậy thấy IP của NLB, không phải IP người dùng.
-- Node đặt `http_put_response_hop_limit = 2` để pod (EBS CSI driver, External Secrets Operator) dùng được quyền của `LabInstanceProfile` qua IMDS. Trong môi trường thật nên dùng IRSA hoặc Pod Identity thay cho cách này.
-- Nếu tài khoản Learner Lab không đọc được instance profile qua API, thay data source `aws_iam_instance_profile` bằng chuỗi `"LabInstanceProfile"` trong `envs/dev/main.tf`.
+- **Chứng chỉ kubelet do CA của cụm ký** (`serverTLSBootstrap: true`), playbook tự duyệt CSR. Nhờ đó metrics-server xác thực được kubelet, không phải dùng cờ `--kubelet-insecure-tls`.
+- **Lệnh join và token không in ra log** (`no_log: true`). Token sống 1 giờ.
+- **Chạy lại an toàn**: các bước `kubeadm init`, `kubeadm join` có điều kiện `creates`, chạy lại playbook không phá cụm đang chạy.
+- **Dựng lại từ đầu**: `ansible-playbook reset.yml` rồi `ansible-playbook site.yml`.

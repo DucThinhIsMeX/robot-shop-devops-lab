@@ -99,11 +99,11 @@ module "ecr" {
   repositories = var.ecr_repositories
 }
 
-module "s3_backup" {
-  source = "../../modules/s3-backup"
-
-  bucket_name = "${local.name}-backup-${data.aws_caller_identity.current.account_id}"
-}
+# module "s3_backup" {
+#   source = "../../modules/s3-backup"
+# 
+#   bucket_name = "${local.name}-backup-${data.aws_caller_identity.current.account_id}"
+# }
 
 module "secrets" {
   source = "../../modules/secrets"

@@ -1,0 +1,5 @@
+- name: Gia nhập cụm
+  ansible.builtin.command: "{{ hostvars[groups['masters'][0]].control_plane_join_command }} --node-name {{ inventory_hostname }}"
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+  no_log: true

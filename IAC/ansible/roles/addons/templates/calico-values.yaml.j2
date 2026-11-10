@@ -1,0 +1,13 @@
+# Quản lý bởi Ansible. VXLAN vì bảng route của VPC không biết dải IP của pod.
+installation:
+  cni:
+    type: Calico
+  calicoNetwork:
+    bgp: Disabled
+    ipPools:
+      - name: default-ipv4-ippool
+        cidr: {{ pod_cidr }}
+        blockSize: 26
+        encapsulation: VXLAN
+        natOutgoing: Enabled
+        nodeSelector: all()

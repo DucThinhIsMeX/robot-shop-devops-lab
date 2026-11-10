@@ -1,0 +1,62 @@
+- name: Đọc phiên bản kubeadm đã cài
+  ansible.builtin.command: kubeadm version -o short
+  register: control_plane_kubeadm_version
+  changed_when: false
+
+- name: Thư mục /etc/kubernetes
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: directory
+    mode: "0755"
+
+- name: Ghi file cấu hình kubeadm
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: /etc/kubernetes/kubeadm-config.yaml
+    mode: "0600"
+
+- name: Tải trước image của control plane
+  ansible.builtin.command: kubeadm config images pull --config /etc/kubernetes/kubeadm-config.yaml
+  args:
+    creates: /etc/kubernetes/admin.conf
+
+- name: Khởi tạo control plane
+  ansible.builtin.command: kubeadm init --config /etc/kubernetes/kubeadm-config.yaml
+  args:
+    creates: /etc/kubernetes/admin.conf
+
+- name: Thư mục kubeconfig cho {{ ansible_user }}
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+
+- name: Chép kubeconfig cho {{ ansible_user }}
+  ansible.builtin.copy:
+    src: "{{ kubeconfig_admin }}"
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+
+- name: Chờ API server sẵn sàng
+  ansible.builtin.command: kubectl --kubeconfig {{ kubeconfig_admin }} get --raw /readyz
+  register: control_plane_readyz
+  until: control_plane_readyz.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Tạo lệnh join cho worker
+  ansible.builtin.command: kubeadm token create --print-join-command --ttl 1h
+  register: control_plane_join_output
+  changed_when: false
+  no_log: true
+
+- name: Lưu lệnh join để play worker dùng
+  ansible.builtin.set_fact:
+    control_plane_join_command: "{{ control_plane_join_output.stdout }}"
+  no_log: true

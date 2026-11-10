@@ -1,0 +1,5 @@
+# Quản lý bởi Ansible. Các thiết lập không ghi ở đây dùng giá trị mặc định của containerd.
+version = 3
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+  SystemdCgroup = true

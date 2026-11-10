@@ -1,0 +1,19 @@
+# Quản lý bởi Ansible
+deployment:
+  replicas: 2
+
+service:
+  spec:
+    type: NodePort
+
+ports:
+  web:
+    nodePort: {{ ingress_http_node_port }}
+  websecure:
+    nodePort: {{ ingress_https_node_port }}
+
+providers:
+  kubernetesIngress:
+    enabled: true
+  kubernetesGateway:
+    enabled: true

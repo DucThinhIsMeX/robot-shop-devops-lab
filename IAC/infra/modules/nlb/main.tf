@@ -1,4 +1,4 @@
-# NLB công khai: cổng 80/443 chuyển tới NodePort của ingress-nginx trên các worker.
+# NLB công khai: cổng 80/443 chuyển tới NodePort của Traefik (ingress controller) trên các worker.
 resource "aws_lb" "this" {
   name               = "${var.name}-nlb"
   load_balancer_type = "network"
@@ -19,7 +19,7 @@ resource "aws_lb_target_group" "ingress" {
   target_type = "instance"
 
   # Tắt giữ IP client để nguồn gói tin là NLB, khớp rule security group tham chiếu sg-nlb.
-  # Đánh đổi: ingress-nginx thấy IP của NLB thay vì IP người dùng.
+  # Đánh đổi: Traefik thấy IP của NLB thay vì IP người dùng.
   preserve_client_ip = "false"
 
   health_check {
