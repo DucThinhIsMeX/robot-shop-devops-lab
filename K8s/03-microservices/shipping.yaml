@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: shipping
-        image: robotshop/rs-shipping:2.1.0
+        image: ducthinhahihi/rs-shipping:v1.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080

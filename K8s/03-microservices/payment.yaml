@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: payment
-        image: robotshop/rs-payment:2.1.0
+        image: ducthinhahihi/rs-payment:v1.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080

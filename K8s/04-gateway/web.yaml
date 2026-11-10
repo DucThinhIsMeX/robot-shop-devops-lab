@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: web
-        image: robotshop/rs-web:2.1.0
+        image: ducthinhahihi/rs-web:v1.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
