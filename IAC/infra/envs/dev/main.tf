@@ -25,8 +25,9 @@ locals {
   name = "${var.project}-${var.environment}"
 
   ingress_listeners = {
-    http  = { port = 80, node_port = var.ingress_http_node_port }
-    https = { port = 443, node_port = var.ingress_https_node_port }
+    http   = { port = 80, node_port = var.ingress_http_node_port }
+    https  = { port = 443, node_port = var.ingress_https_node_port }
+    argocd = { port = 30085, node_port = var.ingress_argocd_node_port }
   }
 }
 
@@ -48,7 +49,7 @@ module "security" {
   vpc_id              = module.network.vpc_id
   private_subnet_cidr = module.network.private_subnet_cidr
   admin_cidrs         = var.admin_cidrs
-  ingress_node_ports  = [var.ingress_http_node_port, var.ingress_https_node_port]
+  ingress_node_ports  = [var.ingress_http_node_port, var.ingress_https_node_port, var.ingress_argocd_node_port]
 }
 
 module "edge" {
@@ -92,11 +93,32 @@ module "nlb" {
   listeners           = local.ingress_listeners
 }
 
-module "ecr" {
-  source = "../../modules/ecr"
+# Máy ảo Rancher Server đặt ở Public Subnet để người quản trị truy cập Web Dashboard
+resource "aws_instance" "rancher" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = "t3.medium"
+  subnet_id                   = module.network.public_subnet_id
+  vpc_security_group_ids      = [module.security.rancher_sg_id]
+  key_name                    = var.key_name
+  iam_instance_profile        = data.aws_iam_instance_profile.lab.name
+  associate_public_ip_address = true
 
-  prefix       = var.project
-  repositories = var.ecr_repositories
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 30
+  }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update && apt-get install -y docker.io
+              systemctl enable --now docker
+              docker run -d --restart=unless-stopped -p 80:80 -p 443:443 --privileged rancher/rancher:latest
+              EOF
+
+  tags = {
+    Name = "${local.name}-rancher"
+    Role = "rancher"
+  }
 }
 
 # module "s3_backup" {

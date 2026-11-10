@@ -16,12 +16,19 @@ output "k8s_workers" {
   value = module.k8s_nodes.workers
 }
 
-output "ecr_registry" {
-  value = module.ecr.registry
+output "docker_hub_namespace" {
+  description = "Docker Hub account chua image cua he thong"
+  value       = var.docker_hub_username
 }
 
-output "ecr_repository_urls" {
-  value = module.ecr.repository_urls
+output "rancher_url" {
+  description = "Giao dien Web Dashboard cua Rancher"
+  value       = "https://${aws_instance.rancher.public_ip}/dashboard"
+}
+
+output "argocd_url" {
+  description = "Giao dien Web Dashboard cua ArgoCD (qua NLB)"
+  value       = "https://${module.nlb.dns_name}:30085"
 }
 
 # output "backup_bucket" {

@@ -96,6 +96,24 @@
         --wait --timeout 5m
       changed_when: true
 
+    # ---------- ArgoCD (GitOps Engine) ----------
+    - name: Tạo namespace argocd
+      ansible.builtin.command: kubectl create namespace argocd
+      register: create_argocd_ns
+      failed_when: create_argocd_ns.rc != 0 and "already exists" not in create_argocd_ns.stderr
+      changed_when: create_argocd_ns.rc == 0
+
+    - name: Cài đặt ArgoCD từ nguồn chính thức
+      ansible.builtin.command: >
+        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+      changed_when: true
+
+    - name: Cấu hình NodePort cho argocd-server khớp NLB
+      ansible.builtin.command: >
+        kubectl patch svc argocd-server -n argocd -p
+        '{"spec": {"type": "NodePort", "ports": [{"port": 443, "targetPort": 8080, "nodePort": {{ ingress_argocd_node_port }}}]}}'
+      changed_when: true
+
 - name: Lấy kubeconfig về máy điều khiển
   ansible.builtin.fetch:
     src: "{{ kubeconfig_admin }}"

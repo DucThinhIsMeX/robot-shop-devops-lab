@@ -96,11 +96,17 @@ variable "ingress_https_node_port" {
   default     = 30443
 }
 
+variable "ingress_argocd_node_port" {
+  description = "NodePort của ArgoCD Web UI"
+  type        = number
+  default     = 30085
+}
+
 # ---------- Registry và secret ----------
-variable "ecr_repositories" {
-  description = "8 service cùng 2 image dữ liệu của Robot Shop"
-  type        = list(string)
-  default     = ["web", "catalogue", "cart", "user", "shipping", "ratings", "payment", "dispatch", "mongo", "mysql"]
+variable "docker_hub_username" {
+  description = "Docker Hub username luu tru toan bo images"
+  type        = string
+  default     = "ducthinhahihi"
 }
 
 variable "app_secrets" {

@@ -9,3 +9,7 @@ output "nlb_sg_id" {
 output "k8s_sg_id" {
   value = aws_security_group.k8s.id
 }
+
+output "rancher_sg_id" {
+  value = aws_security_group.rancher.id
+}
