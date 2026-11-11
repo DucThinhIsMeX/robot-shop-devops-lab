@@ -89,11 +89,23 @@
     state: directory
     mode: "0755"
 
-- name: Cấu hình containerd dùng systemd cgroup
-  ansible.builtin.template:
-    src: containerd-config.toml.j2
-    dest: /etc/containerd/config.toml
-    mode: "0644"
+- name: Sinh file cấu hình containerd mặc định
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+- name: Bật SystemdCgroup cho containerd
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+  notify: Restart containerd
+
+- name: Cập nhật sandbox_image cho containerd khớp K8s 1.31
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'sandbox_image = "registry.k8s.io/pause:.*"'
+    replace: 'sandbox_image = "registry.k8s.io/pause:3.10"'
   notify: Restart containerd
 
 - name: Bật containerd
