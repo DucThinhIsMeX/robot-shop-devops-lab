@@ -116,7 +116,7 @@
 
     - name: Cài đặt ArgoCD từ nguồn chính thức
       ansible.builtin.command: >
-        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+        kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
       changed_when: true
 
     - name: Cấu hình NodePort cho argocd-server khớp NLB
