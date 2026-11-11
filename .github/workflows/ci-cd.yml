@@ -1,145 +1,278 @@
-name: Enterprise CI/CD Pipeline - Robot Shop (5 Stages)
+name: Enterprise CI/CD GitOps Pipeline - Stan's Robot Shop
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'web/**'
+      - 'catalogue/**'
+      - 'cart/**'
+      - 'user/**'
+      - 'shipping/**'
+      - 'payment/**'
+      - 'ratings/**'
+      - 'dispatch/**'
+      - 'mongo/**'
+      - 'mysql/**'
       - '.github/workflows/ci-cd.yml'
   workflow_dispatch:
+    inputs:
+      service:
+        description: 'Chọn dịch vụ cần build & deploy (hoặc chọn "all")'
+        required: true
+        default: 'web'
+        type: choice
+        options:
+          - web
+          - cart
+          - catalogue
+          - user
+          - shipping
+          - payment
+          - ratings
+          - dispatch
+          - mongo
+          - mysql
+          - all
 
 permissions:
   contents: write
 
 jobs:
   # =========================================================================
-  # STAGE 1: CODE QUALITY & LINTING
-  # Kiểm tra tính đúng đắn của mã nguồn, cú pháp shell script và Dockerfile
+  # PHẦN 1: PHÁT HIỆN DỊCH VỤ THAY ĐỔI (INTELLIGENT CHANGE DETECTION)
+  # Chỉ kích hoạt pipeline cho các microservices thực sự có thay đổi mã nguồn
   # =========================================================================
-  stage-1-code-quality:
-    name: "1. Code Quality & Lint"
+  detect-changes:
+    name: "🔍 1. Phát hiện Dịch vụ Thay đổi"
     runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.filter.outputs.has_changes }}
+      services: ${{ steps.filter.outputs.services }}
     steps:
-      - name: 1.1. Checkout Code
+      - name: 1.1. Checkout Code (Fetch History)
         uses: actions/checkout@v4
-
-      - name: 1.2. Shell Script Syntax Check
-        run: |
-          echo "Kiểm tra cú pháp file entrypoint.sh..."
-          bash -n web/entrypoint.sh
-          echo " entrypoint.sh cú pháp hợp lệ!"
-
-      - name: 1.3. Lint Dockerfile (Hadolint)
-        uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ./web/Dockerfile
-          failure-threshold: error
-          ignore: DL3008,DL3018,DL3015
+          fetch-depth: 2
 
-  # =========================================================================
-  # STAGE 2: SECURITY & VULNERABILITY SCAN (DevSecOps)
-  # Rà quét lỗ hổng bảo mật mã nguồn và cấu hình bằng Trivy
-  # =========================================================================
-  stage-2-security-scan:
-    name: "2. Security Scan (DevSecOps)"
-    needs: [ stage-1-code-quality ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: 2.1. Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 2.2. Run Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: './web'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
-
-  # =========================================================================
-  # STAGE 3: DOCKER BUILD & COMPILATION
-  # Đóng gói ứng dụng thành Docker Image cục bộ và kiểm tra tính toàn vẹn
-  # =========================================================================
-  stage-3-docker-build:
-    name: "3. Build Docker Image"
-    needs: [ stage-2-security-scan ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: 3.1. Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 3.2. Set Git Short SHA
-        run: echo "SHA_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
-
-      - name: 3.3. Build Local Docker Image
+      - name: 1.2. Phân tích đường dẫn thay đổi
+        id: filter
         run: |
-          echo "Đang build thử nghiệm Docker Image cục bộ..."
-          docker build -t rs-web:${{ env.SHA_SHORT }} ./web
-          echo " Đóng gói Docker Image rs-web:${{ env.SHA_SHORT }} thành công!"
+          # Trường hợp kích hoạt thủ công (workflow_dispatch)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SELECTED="${{ github.event.inputs.service }}"
+            if [ "$SELECTED" = "all" ]; then
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "services=[\"web\",\"cart\",\"catalogue\",\"user\",\"shipping\",\"payment\",\"ratings\",\"dispatch\"]" >> $GITHUB_OUTPUT
+              echo " Chạy toàn bộ 8 microservices cốt lõi!"
+            else
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "services=[\"$SELECTED\"]" >> $GITHUB_OUTPUT
+              echo " Chỉ định chạy dịch vụ: $SELECTED"
+            fi
+            exit 0
+          fi
+
+          # Trường hợp Git Push tự động: So sánh diff với commit trước
+          CHANGED_SERVICES=()
+          for s in web cart catalogue user shipping payment ratings dispatch mongo mysql; do
+            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^${s}/"; then
+              CHANGED_SERVICES+=("\"$s\"")
+            fi
+          done
+
+          # Nếu thay đổi file cấu hình workflow ci-cd.yml, mặc định chạy service web để kiểm thử
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^\.github/workflows/ci-cd\.yml"; then
+            if [ ${#CHANGED_SERVICES[@]} -eq 0 ]; then
+              CHANGED_SERVICES+=("\"web\"")
+            fi
+          fi
+
+          # Xuất kết quả ma trận JSON
+          if [ ${#CHANGED_SERVICES[@]} -gt 0 ]; then
+            SERVICES_JSON="["$(IFS=,; echo "${CHANGED_SERVICES[*]}")"]"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
+            echo " Các dịch vụ có thay đổi mã nguồn: $SERVICES_JSON"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "services=[]" >> $GITHUB_OUTPUT
+            echo " Không có microservice nào thay đổi mã nguồn. Bỏ qua build."
+          fi
 
   # =========================================================================
-  # STAGE 4: PUBLISH TO REGISTRY (Docker Hub)
-  # Đăng nhập an toàn và phát hành image lên Docker Hub công khai
+  # PHẦN 2: CHU TRÌNH 5 STAGE DEVSECOPS & GITOPS CHO TỪNG DỊCH VỤ
   # =========================================================================
-  stage-4-docker-publish:
-    name: "4. Publish to Docker Hub"
-    needs: [ stage-3-docker-build ]
+  ci-cd-pipeline:
+    name: "🚀 Pipeline: ${{ matrix.service }}"
+    needs: [ detect-changes ]
+    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
     steps:
-      - name: 4.1. Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 4.2. Set Git Short SHA
-        run: echo "SHA_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
-
-      - name: 4.3. Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME || 'ducthinhahihi' }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: 4.4. Build & Push Image to Docker Hub
-        run: |
-          DOCKER_USER="${{ secrets.DOCKERHUB_USERNAME || 'ducthinhahihi' }}"
-          echo "Đang đóng gói và push lên Docker Hub: ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }}..."
-          docker build -t ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }} -t ${DOCKER_USER}/rs-web:latest ./web
-          docker push ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }}
-          docker push ${DOCKER_USER}/rs-web:latest
-          echo " Đã phát hành ${DOCKER_USER}/rs-web lên Docker Hub thành công!"
-
-  # =========================================================================
-  # STAGE 5: GITOPS HANDOFF & AUTO-SYNC
-  # Tự động cập nhật file Kubernetes Manifest và bàn giao cho ArgoCD
-  # =========================================================================
-  stage-5-gitops-handoff:
-    name: "5. GitOps Handoff"
-    needs: [ stage-4-docker-publish ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: 5.1. Checkout Code
+      - name: 1.1. Checkout Mã nguồn
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 5.2. Set Git Short SHA
-        run: echo "SHA_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
-
-      - name: 5.3. Update K8s Manifest Image Tag
+      - name: 1.2. Thiết lập Biến Môi trường & Định danh Tag
         run: |
+          SERVICE="${{ matrix.service }}"
           DOCKER_USER="${{ secrets.DOCKERHUB_USERNAME || 'ducthinhahihi' }}"
-          sed -i "s|image: .*rs-web:.*|image: ${DOCKER_USER}/rs-web:${{ env.SHA_SHORT }}|g" K8s/04-gateway/web.yaml
-          echo " Đã cập nhật K8s/04-gateway/web.yaml trỏ về tag: ${{ env.SHA_SHORT }}"
+          SHA_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)
 
-      - name: 5.4. Commit & Push Updated Manifest (GitOps Trigger)
+          # Ánh xạ tên image và đường dẫn file Kubernetes manifest
+          case "$SERVICE" in
+            web)
+              IMAGE_NAME="rs-web"
+              MANIFEST="K8s/04-gateway/web.yaml"
+              ;;
+            mongo)
+              IMAGE_NAME="rs-mongodb"
+              MANIFEST="K8s/02-datastores/mongodb.yaml"
+              ;;
+            mysql)
+              IMAGE_NAME="rs-mysql"
+              MANIFEST="K8s/02-datastores/mysql.yaml"
+              ;;
+            *)
+              IMAGE_NAME="rs-${SERVICE}"
+              MANIFEST="K8s/03-microservices/${SERVICE}.yaml"
+              ;;
+          esac
+
+          echo "SERVICE=${SERVICE}" >> $GITHUB_ENV
+          echo "DOCKER_USER=${DOCKER_USER}" >> $GITHUB_ENV
+          echo "SHA_SHORT=${SHA_SHORT}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+          echo "MANIFEST=${MANIFEST}" >> $GITHUB_ENV
+
+          echo "========================================================="
+          echo "Microservice: $SERVICE"
+          echo "Image Name:   $IMAGE_NAME"
+          echo "Tag:          $SHA_SHORT"
+          echo "K8s Manifest: $MANIFEST"
+          echo "Docker Hub:   $DOCKER_USER"
+          echo "========================================================="
+
+      # ---------------------------------------------------------------------
+      # STAGE 1: CODE QUALITY & LINTING
+      # ---------------------------------------------------------------------
+      - name: "Stage 1: Lint Dockerfile & Shell Scripts"
         run: |
+          echo "=== STAGE 1: KIỂM TRA CHẤT LƯỢNG MÃ NGUỒN ==="
+          
+          # Kiểm tra cú pháp tất cả file shell script trong thư mục service
+          if compgen -G "${{ env.SERVICE }}/*.sh" > /dev/null; then
+            for sh_file in ${{ env.SERVICE }}/*.sh; do
+              echo "Checking syntax: $sh_file"
+              bash -n "$sh_file"
+            done
+            echo " Toàn bộ shell script hợp lệ!"
+          fi
+
+          # Kiểm tra sự tồn tại của Dockerfile
+          if [ -f "${{ env.SERVICE }}/Dockerfile" ]; then
+            echo " Dockerfile tồn tại trong ${{ env.SERVICE }}/Dockerfile"
+          else
+            echo "❌ Không tìm thấy Dockerfile trong ${{ env.SERVICE }}"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------------
+      # STAGE 2: SECURITY & VULNERABILITY SCAN (DevSecOps - Trivy)
+      # ---------------------------------------------------------------------
+      - name: "Stage 2: Quét Lỗ Hổng Bảo Mật (Trivy DevSecOps)"
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './${{ env.SERVICE }}'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      # ---------------------------------------------------------------------
+      # STAGE 3: BUILD LOCAL DOCKER IMAGE & TEST
+      # ---------------------------------------------------------------------
+      - name: "Stage 3: Đóng gói Docker Image Cục bộ"
+        run: |
+          echo "=== STAGE 3: ĐÓNG GÓI DOCKER IMAGE ==="
+          echo "Đang build image cục bộ: ${{ env.IMAGE_NAME }}:${{ env.SHA_SHORT }}..."
+          docker build -t ${{ env.IMAGE_NAME }}:${{ env.SHA_SHORT }} ./${{ env.SERVICE }}
+          echo " Đóng gói ${{ env.IMAGE_NAME }}:${{ env.SHA_SHORT }} thành công!"
+
+      # ---------------------------------------------------------------------
+      # STAGE 4: PUBLISH TO REGISTRY (Docker Hub)
+      # ---------------------------------------------------------------------
+      - name: "Stage 4.1: Đăng nhập Docker Hub"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: "Stage 4.2: Đẩy Image lên Docker Hub"
+        run: |
+          echo "=== STAGE 4: PHÁT HÀNH IMAGE LÊN DOCKER HUB ==="
+          FULL_IMAGE="${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}"
+          
+          echo "Gán tag và đẩy $FULL_IMAGE:${{ env.SHA_SHORT }}..."
+          docker tag ${{ env.IMAGE_NAME }}:${{ env.SHA_SHORT }} ${FULL_IMAGE}:${{ env.SHA_SHORT }}
+          docker tag ${{ env.IMAGE_NAME }}:${{ env.SHA_SHORT }} ${FULL_IMAGE}:latest
+          
+          docker push ${FULL_IMAGE}:${{ env.SHA_SHORT }}
+          docker push ${FULL_IMAGE}:latest
+          echo " Phát hành thành công lên Docker Hub: https://hub.docker.com/r/${FULL_IMAGE}"
+
+      # ---------------------------------------------------------------------
+      # STAGE 5: GITOPS HANDOFF & AUTO-SYNC
+      # ---------------------------------------------------------------------
+      - name: "Stage 5: Cập nhật Manifest K8s & Kích hoạt GitOps"
+        run: |
+          echo "=== STAGE 5: BÀN GIAO GITOPS CHO ARGOCD ==="
+          FULL_IMAGE="${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}"
+          MANIFEST_PATH="${{ env.MANIFEST }}"
+          
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "❌ Không tìm thấy file manifest: $MANIFEST_PATH"
+            exit 1
+          fi
+
+          # Tự động cập nhật thẻ image trong manifest K8s
+          sed -i "s|image: .*${{ env.IMAGE_NAME }}:.*|image: ${FULL_IMAGE}:${{ env.SHA_SHORT }}|g" "$MANIFEST_PATH"
+          echo " Đã cập nhật $MANIFEST_PATH trỏ về: ${FULL_IMAGE}:${{ env.SHA_SHORT }}"
+
+          # Cấu hình bot và commit ngược lại kho Git
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add K8s/04-gateway/web.yaml
+          git add "$MANIFEST_PATH"
+          
           if git diff --staged --quiet; then
-            echo "Không có thay đổi trong manifest."
+            echo "Không có thay đổi trong manifest K8s (tag đã khớp)."
           else
-            git commit -m "chore(gitops): auto-update web image to ${{ env.SHA_SHORT }} [skip ci]"
-            git push origin main
-            echo " Đã commit & push GitOps manifest! ArgoCD sẽ tự động đồng bộ."
+            git commit -m "chore(gitops): auto-update ${{ env.IMAGE_NAME }} to ${{ env.SHA_SHORT }} [skip ci]"
+            
+            # Cơ chế Rebase Retry chống xung đột khi nhiều service build đồng thời
+            MAX_RETRIES=5
+            COUNT=0
+            SUCCESS=0
+            while [ $COUNT -lt $MAX_RETRIES ]; do
+              git pull --rebase origin main
+              if git push origin main; then
+                SUCCESS=1
+                break
+              fi
+              COUNT=$((COUNT+1))
+              echo "Xung đột push đồng thời, thử lại lần $COUNT sau 2 giây..."
+              sleep 2
+            done
+
+            if [ $SUCCESS -eq 1 ]; then
+              echo " Đã commit & push Manifest K8s lên Git thành công! ArgoCD sẽ tự động kích hoạt Rolling Update."
+            else
+              echo "❌ Không thể push commit sau $MAX_RETRIES lần thử."
+              exit 1
+            fi
           fi

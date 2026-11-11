@@ -199,3 +199,4 @@ File workflow [.github/workflows/ci-cd.yml](file:///c:/Users/Duc%20Thinh/Documen
    * Trình diễn khả năng tự phục hồi của ArgoCD và Kubernetes khi Pod hoặc Service bị cố tình xóa bỏ.
 4. **Bảo mật bí mật GitOps nâng cao (Bitnami Sealed Secrets):**
    * Mã hóa bất đối xứng các mật khẩu trong Git để loại bỏ rủi ro lộ Secret trên GitHub.
+
